@@ -1,5 +1,9 @@
 import asyncio
 
+import os
+
+from dotenv import load_dotenv
+
 from aiogram import Bot, Dispatcher
 from aiogram.types import Message, CallbackQuery
 from aiogram.filters import CommandStart, Command
@@ -22,7 +26,9 @@ from handlers.leaderboard_handler import (
     show_leaderboard
 )
 
-TOKEN = "8722440828:AAH3tmQ8FSt6Ral6fahztSo6qJRbFUgNHso"
+load_dotenv()
+
+TOKEN = os.getenv("BOT_TOKEN")
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
