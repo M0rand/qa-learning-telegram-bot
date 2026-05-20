@@ -1,154 +1,404 @@
-from aiogram.types import Message
-from aiogram.filters import CommandStart
+from aiogram.types import (
+    Message,
+    CallbackQuery
+)
 
-from data.lessons import lessons
-from keyboards.inline_keyboard import yes_no_keyboard
+from data.blocks import blocks
+
+from keyboards.block_keyboard import (
+    block_keyboard
+)
+
+from keyboards.continue_keyboard import (
+    continue_keyboard
+)
+
+from keyboards.next_block_keyboard import (
+    next_block_keyboard
+)
+
+from keyboards.answer_keyboard import (
+    answer_keyboard
+)
+
 from services.user_service import (
-    create_user,
+
     add_xp_db,
-    set_lesson
+
+    complete_lesson,
+
+    is_lesson_completed,
+
+    get_completed_lessons_count
 )
 
-from services.user_service import create_user
-
-from services.achievement_service import (
-    unlock_achievement
+from services.progress_service import (
+    generate_progress_bar
 )
-
-from services.streak_service import update_streak
 
 user_state = {}
 
-async def start_lesson(message: Message):
-    create_user(
+block_order = list(
 
-        message.from_user.id,
+    blocks.keys()
+)
 
-        message.from_user.first_name
+async def start_lesson(
+    message: Message
+):
+
+    text = (
+
+        "📚 Выбери раздел\n\n"
+
+        "👇 Доступные блоки:"
     )
-    
-    
-    user_state[message.from_user.id] = 1
 
-    lesson = lessons[1]
-
-    streak = update_streak(
-        message.from_user.id
-    )
     await message.answer(
-        f"🔥 Серия дней: {streak}\n\n"
-        f"📚 {lesson['title']}\n\n"
-        f"📖 Теория:\n{lesson['theory']}\n\n"
-        f"💡 Пример:\n{lesson['example']}\n\n"
-        f"❓ Вопрос:\n{lesson['question']}",
-        reply_markup=yes_no_keyboard()
+
+        text,
+
+        reply_markup=block_keyboard()
     )
 
 
-async def handle_answer(message: Message):
+async def select_block(
+    callback: CallbackQuery
+):
 
-    state = user_state.get(message.from_user.id)
+    user_id = callback.from_user.id
 
-    if not state:
+    block_id = callback.data.split(":")[1]
 
-        await message.answer("Нажми 📚 Учиться")
-        return
+    user_state[user_id] = {
 
-    lesson = lessons.get(state)
+        "block": block_id,
 
-    if message.text.lower() == lesson["correct"]:
+        "lesson": 0
+    }
 
-        # XP
-        add_xp_db(
-            message.from_user.id,
-            lesson["xp"]
-        )
+    await send_lesson(
 
-    # Achievement за первый урок
-        if state == 1:
+        callback.message,
 
-            achievement = unlock_achievement(
-                message.from_user.id,
-                "first_lesson"
-            )
+        user_id
+    )
 
-            if achievement:
+    await callback.answer()
 
-                await message.answer(
 
-                    f"🏆 Новая ачивка!\n\n"
-                    f"{achievement['title']}\n"
-                    f"{achievement['description']}"
-                )
+async def send_lesson(
+    message,
+    user_id
+):
 
-    # Achievement за XP
-        from services.user_service import get_xp_db
+    state = user_state[user_id]
 
-        current_xp = get_xp_db(
-            message.from_user.id
-        )
+    block_id = state["block"]
 
-        if current_xp >= 50:
+    lesson_index = state["lesson"]
 
-            achievement = unlock_achievement(
-                message.from_user.id,
-                "xp_50"
-            )
+    block = blocks[block_id]
 
-            if achievement:
+    lessons = block["lessons"]
 
-                await message.answer(
+    lesson = lessons[lesson_index]
 
-                    f"🏆 Новая ачивка!\n\n"
-                    f"{achievement['title']}"
-                )
+    completed = get_completed_lessons_count(
 
-        await message.answer(
+        user_id,
 
-            f"{lesson['success']}\n\n"
-            f"⭐ XP начислен: +{lesson['xp']}"
-        )
+        block_id
+    )
 
-        next_lesson = state + 1
+    display_progress = completed
 
-        if next_lesson in lessons:
+    if display_progress >= len(lessons):
 
-            user_state[message.from_user.id] = next_lesson
+        display_progress = len(lessons) - 1
 
-            set_lesson(
-                message.from_user.id,
-                next_lesson
-            )
+    progress = generate_progress_bar(
 
-            next_data = lessons[next_lesson]
+        display_progress,
 
-            await message.answer(
+        len(lessons)
+    )
 
-                f"📚 {next_data['title']}\n\n"
+    if "options" in lesson:
 
-                f"📖 Теория:\n"
-                f"{next_data['theory']}\n\n"
+        options_text = "\n\n"
 
-                f"💡 Пример:\n"
-                f"{next_data['example']}\n\n"
+        for index, option in enumerate(
 
-                f"❓ Вопрос:\n"
-                f"{next_data['question']}",
+            lesson["options"],
 
-                reply_markup=yes_no_keyboard()
-            )
+            start=1
+        ):
 
-        else:
+            options_text += (
 
-            await message.answer(
-
-                "🏆 Поздравляю!\n\n"
-                "Ты прошёл все уроки 🚀"
+                f"{index}️⃣ {option}\n"
             )
 
     else:
 
+        options_text = ""
+
+
+    text = (
+
+        f"{block['title']}\n\n"
+
+        f"📚 Урок "
+        f"{lesson_index + 1} "
+        f"из {len(lessons)}\n\n"
+
+        f"📈 Прогресс:\n"
+        f"{progress}\n\n"
+
+        f"🧠 Главное:\n"
+        f"{lesson['theory']}\n\n"
+
+        f"💡 Пример:\n"
+        f"{lesson['example']}\n\n"
+
+        f"❓ Вопрос:\n"
+        f"{lesson['question']}\n"
+
+        f"{options_text}"
+    )
+
+    await message.answer(
+
+        text,
+
+        reply_markup=answer_keyboard()
+    )
+
+
+async def handle_answer(
+    message: Message
+):
+
+    user_id = message.from_user.id
+
+    if user_id not in user_state:
+
         await message.answer(
 
-            "❌ Неверно, попробуй ещё"
+            "Нажми 📚 Учиться"
         )
+
+        return
+
+    state = user_state[user_id]
+
+    block = blocks[state["block"]]
+
+    lessons = block["lessons"]
+
+    lesson = lessons[state["lesson"]]
+
+    user_answer = message.text.strip()
+
+    correct = lesson["correct"]
+
+    if user_answer == correct:
+
+        already_completed = is_lesson_completed(
+
+            user_id,
+
+            state["block"],
+
+            state["lesson"]
+        )
+
+        if not already_completed:
+
+            add_xp_db(
+
+                user_id,
+
+                lesson["xp"]
+            )
+
+            complete_lesson(
+
+                user_id,
+
+                state["block"],
+
+                state["lesson"]
+            )
+
+            xp_text = (
+
+                f"⭐ +{lesson['xp']} XP"
+            )
+
+        else:
+
+            xp_text = (
+
+                "✅ XP уже получен "
+                "за этот урок"
+            )
+
+        text = (
+
+            "🎉 Отлично!\n\n"
+
+            f"📘 Объяснение:\n"
+            f"{lesson['explanation']}\n\n"
+
+            f"{xp_text}"
+        )
+
+    else:
+
+        text = (
+
+            "❌ Пока неверно\n\n"
+
+            f"📘 Объяснение:\n"
+            f"{lesson['explanation']}"
+        )
+
+    if user_answer == correct:
+
+        await message.answer(
+
+            text,
+
+            reply_markup=continue_keyboard()
+        )
+
+    else:
+
+        await message.answer(text)
+
+async def continue_lesson(
+    callback: CallbackQuery
+):
+
+    user_id = callback.from_user.id
+
+    if user_id not in user_state:
+
+        await callback.answer()
+
+        return
+
+    state = user_state[user_id]
+
+    block = blocks[state["block"]]
+
+    lessons = block["lessons"]
+
+    state["lesson"] += 1
+
+    if state["lesson"] >= len(lessons):
+
+        final_progress = generate_progress_bar(
+
+            len(lessons),
+
+            len(lessons)
+        )
+        
+        await callback.message.answer(
+
+            "🏆 Блок завершён!\n\n"
+
+            f"{final_progress}\n\n"
+
+            f"Ты прошёл:\n"
+            f"{block['title']}",
+
+            reply_markup=next_block_keyboard()
+        )
+
+        await callback.answer()
+
+        return
+
+    await send_lesson(
+
+        callback.message,
+
+        user_id
+    )
+
+    await callback.answer()
+
+async def next_block(
+    callback: CallbackQuery
+):
+
+    user_id = callback.from_user.id
+
+    if user_id not in user_state:
+
+        await callback.answer()
+
+        return
+
+    state = user_state[user_id]
+
+    current_block = state["block"]
+
+    current_index = block_order.index(
+        current_block
+    )
+
+    next_index = current_index + 1
+
+    if next_index >= len(block_order):
+
+        await callback.message.answer(
+
+            "🎉 Ты прошёл все блоки!"
+        )
+
+        del user_state[user_id]
+
+        await callback.answer()
+
+        return
+
+    next_block_id = block_order[
+        next_index
+    ]
+
+    next_block_lessons = blocks[
+        next_block_id
+    ]["lessons"]
+
+    if not next_block_lessons:
+
+        await callback.message.answer(
+
+            "🚧 Этот блок "
+            "ещё в разработке"
+        )
+
+        await callback.answer()
+
+        return
+
+    user_state[user_id] = {
+
+        "block": next_block_id,
+
+        "lesson": 0
+    }
+
+    await send_lesson(
+
+        callback.message,
+
+        user_id
+    )
+
+    await callback.answer()

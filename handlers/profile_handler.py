@@ -1,12 +1,42 @@
+import sqlite3
+
 from aiogram.types import Message
 
 from services.user_service import (
     get_xp_db,
-    get_lesson
 )
 
 from services.level_service import get_level
 
+def get_total_completed_lessons(
+
+    user_id
+):
+
+    conn = sqlite3.connect(
+        "qa_bot.db"
+    )
+
+    cursor = conn.cursor()
+
+    cursor.execute(
+
+        """
+        SELECT COUNT(*)
+
+        FROM completed_lessons
+
+        WHERE user_id = ?
+        """,
+
+        (user_id,)
+    )
+
+    count = cursor.fetchone()[0]
+
+    conn.close()
+
+    return count
 
 async def show_profile(message: Message):
 
@@ -16,7 +46,10 @@ async def show_profile(message: Message):
 
     level = get_level(xp)
 
-    progress = get_lesson(user_id)
+    completed_lessons = get_total_completed_lessons(
+
+        user_id
+    )
 
     await message.answer(
 
@@ -24,5 +57,5 @@ async def show_profile(message: Message):
 
         f"🏆 Уровень: {level}\n"
         f"⭐ XP: {xp}\n"
-        f"📚 Пройдено уроков: {progress - 1}\n"
+        f"📚 Пройдено уроков: {completed_lessons}\n"
     )

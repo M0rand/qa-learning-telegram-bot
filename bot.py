@@ -11,9 +11,20 @@ from aiogram.filters import CommandStart, Command
 from keyboards.main_menu import main_menu
 
 from handlers.lesson_handler import (
+
     start_lesson,
-    handle_answer
+
+    handle_answer,
+
+    select_block,
+
+    continue_lesson,
+
+    next_block,
+
+    user_state
 )
+
 from handlers.profile_handler import show_profile
 
 from handlers.interview_handler import (
@@ -24,6 +35,10 @@ from handlers.interview_handler import (
 
 from handlers.leaderboard_handler import (
     show_leaderboard
+)
+
+from data.interview_questions import (
+    questions
 )
 
 load_dotenv()
@@ -74,53 +89,134 @@ async def profile(message: Message):
 
     await show_profile(message)
 
-@dp.callback_query()
-async def lesson_callback(callback: CallbackQuery):
+@dp.message(lambda message: message.text == "🏆 Рейтинг")
+async def leaderboard(message: Message):
 
-    print("CALLBACK WORKS")
+    await show_leaderboard(message)
 
-    if callback.data == "yes":
+@dp.callback_query(
+    lambda c: c.data.startswith("block:")
+)
+async def block_selection(
+    callback: CallbackQuery
+):
 
-        user_answer = "да"
+    await select_block(callback)
 
-    else:
+@dp.callback_query(
+    lambda c: c.data == "continue_lesson"
+)
+async def continue_callback(
+    callback: CallbackQuery
+):
 
-        user_answer = "нет"
+    await continue_lesson(callback)
+
+@dp.callback_query(
+    lambda c: c.data == "next_block"
+)
+async def next_block_callback(
+    callback: CallbackQuery
+):
+
+    await next_block(callback)
+
+@dp.message()
+async def fallback(message: Message):
+
+    user_id = message.from_user.id
+
+    if user_id in interview_state:
+
+        await handle_interview_answer(message)
+
+        return
+
+    await message.answer(
+
+        "Используй кнопки меню 👇"
+    )
+
+@dp.callback_query(
+    lambda c: c.data == "next_question"
+)
+async def next_interview_question(
+    callback: CallbackQuery
+):
+
+    user_id = callback.from_user.id
+
+    if user_id not in interview_state:
+
+        await callback.answer()
+
+        return
+
+    interview_state[user_id] += 1
+
+    index = interview_state[user_id]
+
+    if index >= len(questions):
+
+        await callback.message.answer(
+
+            "🏆 Собеседование завершено!"
+        )
+
+        del interview_state[user_id]
+
+        await callback.answer()
+
+        return
+
+    question = questions[index][
+        "question"
+    ]
+
+    await callback.message.answer(
+
+        f"❓ Вопрос {index + 1}\n\n"
+        f"{question}"
+    )
+
+    await callback.answer()
+
+@dp.callback_query(
+    lambda c: c.data.startswith(
+        "answer:"
+    )
+)
+async def answer_callback(
+    callback: CallbackQuery
+):
+
+    answer = callback.data.split(":")[1]
 
     class FakeMessage:
-        def __init__(self, text, from_user, answer_method):
+
+        def __init__(
+            self,
+            text,
+            from_user,
+            answer_method
+        ):
+
             self.text = text
             self.from_user = from_user
             self.answer = answer_method
 
     fake_message = FakeMessage(
-        text=user_answer,
+
+        text=answer,
+
         from_user=callback.from_user,
+
         answer_method=callback.message.answer
     )
-
+    
     await handle_answer(fake_message)
 
     await callback.answer()
-
-@dp.message(lambda message: message.text == "🏆 Рейтинг")
-async def leaderboard(message: Message):
-
-    await show_leaderboard(message)
-    
-#@dp.message()
-#async def answer(message: Message):
-
-#    user_id = message.from_user.id
-
-#    if user_id in interview_state:
-
-#        await handle_interview_answer(message)
-
-#    else:
-
-#        await handle_answer(message)
-
 
 async def main():
 

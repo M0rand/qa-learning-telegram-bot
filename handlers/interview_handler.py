@@ -2,6 +2,13 @@ from aiogram.types import Message
 
 from data.interview_questions import questions
 
+from services.interview_evaluator import (
+    evaluate_answer
+)
+
+from keyboards.interview_keyboard import (
+    next_question_keyboard
+)
 
 interview_state = {}
 
@@ -13,16 +20,22 @@ async def start_interview(message: Message):
     user_id = message.from_user.id
 
     interview_state[user_id] = 0
-    interview_score[user_id] = 0
 
     await message.answer(
 
         "🎤 QA Interview\n\n"
-        "Я буду задавать вопросы как на QA-собеседовании.\n\n"
+        "Я буду задавать вопросы "
+        "как на QA-собеседовании.\n\n"
         "Отвечай своими словами 🔥"
     )
 
-    await ask_question(message)
+    first_question = questions[0]["question"]
+
+    await message.answer(
+
+        f"❓ Вопрос 1\n\n"
+        f"{first_question}"
+    )
 
 
 async def ask_question(message: Message):
@@ -35,40 +48,49 @@ async def ask_question(message: Message):
 
     await message.answer(
 
-        f"❓ Вопрос {current + 1}\n\n"
         f"{question}"
     )
 
 
-async def handle_interview_answer(message: Message):
+async def handle_interview_answer(
+    message: Message
+):
 
     user_id = message.from_user.id
 
-    current = interview_state[user_id]
+    if user_id not in interview_state:
 
-    correct_answer = questions[current]["answer"]
+        return
 
-    user_answer = message.text.lower()
+    user_answer = message.text
 
-    if len(user_answer) > 5:
+    index = interview_state[user_id]
 
-        interview_score[user_id] += 1
+    current_question = questions[index][
+        "question"
+    ]
 
-        await message.answer(
+    correct_answer = questions[index][
+        "answer"
+    ]
 
-            "✅ Ответ принят\n\n"
-            f"💡 Пример хорошего ответа:\n"
-            f"{correct_answer}"
-        )
+    feedback = evaluate_answer(
 
-    else:
+        current_question,
 
-        await message.answer(
+        user_answer,
 
-            "❌ Ответ слишком короткий"
-        )
+        correct_answer
+    )
 
-    interview_state[user_id] += 1
+    await message.answer(
+
+        feedback,
+
+        reply_markup=next_question_keyboard()
+    )
+
+    
 
     next_question = interview_state[user_id]
 

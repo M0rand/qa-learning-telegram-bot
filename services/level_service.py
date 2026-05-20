@@ -1,16 +1,19 @@
 def get_level(xp):
 
-    if xp >= 1500:
+    if xp >= 3000:
+        return "QA Lead"
+
+    elif xp >= 1500:
         return "Senior QA"
 
     elif xp >= 700:
         return "Middle QA"
 
     elif xp >= 300:
-        return "Strong Junior"
+        return "Junior QA+"
 
     elif xp >= 100:
         return "Junior QA"
 
     else:
-        return "Intern"
+        return "Intern QA"
